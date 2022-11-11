@@ -43,7 +43,7 @@ from cc1101.options import PacketLengthMode
     ),
 )
 def test_disable_checksum(transceiver, pktctrl0_before, pktctrl0_after):
-    xfer_mock = transceiver._spi.xfer
+    xfer_mock = transceiver._spi.transfer
     xfer_mock.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=pktctrl0_before
@@ -62,10 +62,10 @@ def test_disable_checksum(transceiver, pktctrl0_before, pktctrl0_after):
     ),
 )
 def test_get_packet_length_mode(transceiver, pktctrl0, expected_mode):
-    xfer_mock = transceiver._spi.xfer
-    xfer_mock.return_value = [0, pktctrl0]
+    transfer_mock = transceiver._spi.transfer
+    transfer_mock.return_value = [0, pktctrl0]
     assert transceiver.get_packet_length_mode() == expected_mode
-    xfer_mock.assert_called_once_with([0x08 | 0x80, 0])
+    transfer_mock.assert_called_once_with([0x08 | 0x80, 0])
 
 
 @pytest.mark.parametrize(
@@ -83,10 +83,10 @@ def test_get_packet_length_mode(transceiver, pktctrl0, expected_mode):
     ),
 )
 def test_set_packet_length_mode(transceiver, pktctrl0_before, pktctrl0_after, mode):
-    xfer_mock = transceiver._spi.xfer
-    xfer_mock.return_value = [15, 15]
+    transfer_mock = transceiver._spi.transfer
+    transfer_mock.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=pktctrl0_before
     ):
         transceiver.set_packet_length_mode(mode)
-    xfer_mock.assert_called_once_with([0x08 | 0x40, pktctrl0_after])
+    transfer_mock.assert_called_once_with([0x08 | 0x40, pktctrl0_after])

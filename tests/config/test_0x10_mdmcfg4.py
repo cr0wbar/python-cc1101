@@ -33,9 +33,9 @@ import pytest
     ],
 )
 def test__get_filter_bandwidth_hertz(transceiver, mdmcfg4, real):
-    transceiver._spi.xfer.return_value = [15, mdmcfg4]
+    transceiver._spi.transfer.return_value = [15, mdmcfg4]
     assert transceiver._get_filter_bandwidth_hertz() == pytest.approx(real, rel=1e-3)
-    transceiver._spi.xfer.assert_called_once_with([0x10 | 0x80, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x10 | 0x80, 0])
 
 
 @pytest.mark.parametrize(
@@ -52,12 +52,12 @@ def test__get_filter_bandwidth_hertz(transceiver, mdmcfg4, real):
 def test__set_filter_bandwidth(
     transceiver, mdmcfg4_before, mdmcfg4_after, exponent, mantissa
 ):
-    transceiver._spi.xfer.return_value = [15, 15]
+    transceiver._spi.transfer.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=mdmcfg4_before
     ):
         transceiver._set_filter_bandwidth(mantissa=mantissa, exponent=exponent)
-    transceiver._spi.xfer.assert_called_once_with([0x10 | 0x40, mdmcfg4_after])
+    transceiver._spi.transfer.assert_called_once_with([0x10 | 0x40, mdmcfg4_after])
 
 
 @pytest.mark.parametrize(
@@ -73,9 +73,9 @@ def test__set_filter_bandwidth(
     ),
 )
 def test__get_symbol_rate_exponent(transceiver, mdmcfg4, exponent):
-    transceiver._spi.xfer.return_value = [15, mdmcfg4]
+    transceiver._spi.transfer.return_value = [15, mdmcfg4]
     assert transceiver._get_symbol_rate_exponent() == exponent
-    transceiver._spi.xfer.assert_called_once_with([0x10 | 0x80, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x10 | 0x80, 0])
 
 
 @pytest.mark.parametrize(
@@ -94,9 +94,9 @@ def test__get_symbol_rate_exponent(transceiver, mdmcfg4, exponent):
 def test__set_symbol_rate_exponent(
     transceiver, mdmcfg4_before, mdmcfg4_after, exponent
 ):
-    transceiver._spi.xfer.return_value = [0x0F, 0x0F]
+    transceiver._spi.transfer.return_value = [0x0F, 0x0F]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=mdmcfg4_before
     ):
         transceiver._set_symbol_rate_exponent(exponent)
-    transceiver._spi.xfer.assert_called_once_with([0x10 | 0x40, mdmcfg4_after])
+    transceiver._spi.transfer.assert_called_once_with([0x10 | 0x40, mdmcfg4_after])

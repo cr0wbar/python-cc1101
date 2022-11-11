@@ -67,9 +67,7 @@ setuptools.setup(
     # >=3.7 postponed evaluation of type annotations (PEP563)
     python_requires=">=3.7",
     install_requires=[
-        # apt install python3-spidev
-        # https://github.com/doceme/py-spidev
-        "spidev",
+        "python-periphery",
     ],
     setup_requires=["setuptools_scm"],
     tests_require=["pytest"],

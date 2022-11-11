@@ -35,9 +35,9 @@ import pytest
     ],
 )
 def test__get_power_amplifier_setting_index(transceiver, frend0, setting_index):
-    transceiver._spi.xfer.return_value = [15, frend0]
+    transceiver._spi.transfer.return_value = [15, frend0]
     assert transceiver._get_power_amplifier_setting_index() == setting_index
-    transceiver._spi.xfer.assert_called_once_with([0x22 | 0x80, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x22 | 0x80, 0])
 
 
 @pytest.mark.parametrize(
@@ -54,16 +54,16 @@ def test__get_power_amplifier_setting_index(transceiver, frend0, setting_index):
 def test__set_power_amplifier_setting_index(
     transceiver, frend0_before, frend0_after, setting_index
 ):
-    transceiver._spi.xfer.return_value = [15, 15]
+    transceiver._spi.transfer.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=frend0_before
     ):
         transceiver._set_power_amplifier_setting_index(setting_index)
-    transceiver._spi.xfer.assert_called_once_with([0x22 | 0x40, frend0_after])
+    transceiver._spi.transfer.assert_called_once_with([0x22 | 0x40, frend0_after])
 
 
 @pytest.mark.parametrize("setting_index", (-1, 8, 21))
 def test__set_power_amplifier_setting_index_invalid(transceiver, setting_index):
     with pytest.raises(Exception):
         transceiver._set_power_amplifier_setting_index(setting_index)
-    transceiver._spi.xfer.assert_not_called()
+    transceiver._spi.transfer.assert_not_called()

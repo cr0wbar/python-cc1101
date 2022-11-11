@@ -37,9 +37,9 @@ from cc1101.options import ModulationFormat, SyncMode
     ),
 )
 def test_get_modulation_format(transceiver, mdmcfg2, mod_format):
-    transceiver._spi.xfer.return_value = [15, mdmcfg2]
+    transceiver._spi.transfer.return_value = [15, mdmcfg2]
     assert transceiver.get_modulation_format() == mod_format
-    transceiver._spi.xfer.assert_called_once_with([0x12 | 0x80, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x12 | 0x80, 0])
 
 
 @pytest.mark.parametrize(
@@ -57,12 +57,12 @@ def test_get_modulation_format(transceiver, mdmcfg2, mod_format):
     ],
 )
 def test__set_modulation_format(transceiver, mdmcfg2_before, mdmcfg2_after, mod_format):
-    transceiver._spi.xfer.return_value = [15, 15]
+    transceiver._spi.transfer.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=mdmcfg2_before
     ):
         transceiver._set_modulation_format(mod_format)
-    transceiver._spi.xfer.assert_called_once_with([0x12 | 0x40, mdmcfg2_after])
+    transceiver._spi.transfer.assert_called_once_with([0x12 | 0x40, mdmcfg2_after])
 
 
 @pytest.mark.parametrize(
@@ -75,12 +75,12 @@ def test__set_modulation_format(transceiver, mdmcfg2_before, mdmcfg2_after, mod_
     ],
 )
 def test_enable_manchester_code(transceiver, mdmcfg2_before, mdmcfg2_after):
-    transceiver._spi.xfer.return_value = [15, 15]
+    transceiver._spi.transfer.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=mdmcfg2_before
     ):
         transceiver.enable_manchester_code()
-    transceiver._spi.xfer.assert_called_once_with([0x12 | 0x40, mdmcfg2_after])
+    transceiver._spi.transfer.assert_called_once_with([0x12 | 0x40, mdmcfg2_after])
 
 
 @pytest.mark.parametrize(
@@ -98,9 +98,9 @@ def test_enable_manchester_code(transceiver, mdmcfg2_before, mdmcfg2_after):
     ],
 )
 def test_get_sync_mode(transceiver, mdmcfg2, sync_mode):
-    transceiver._spi.xfer.return_value = [15, mdmcfg2]
+    transceiver._spi.transfer.return_value = [15, mdmcfg2]
     assert transceiver.get_sync_mode() == sync_mode
-    transceiver._spi.xfer.assert_called_once_with([0x12 | 0x80, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x12 | 0x80, 0])
 
 
 @pytest.mark.parametrize(
@@ -122,11 +122,11 @@ def test_get_sync_mode(transceiver, mdmcfg2, sync_mode):
 def test_set_sync_mode(
     transceiver, mdmcfg2_before, mdmcfg2_after, sync_mode, threshold_enabled
 ):
-    transceiver._spi.xfer.return_value = [15, 15]
+    transceiver._spi.transfer.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=mdmcfg2_before
     ):
         transceiver.set_sync_mode(
             sync_mode, _carrier_sense_threshold_enabled=threshold_enabled
         )
-    transceiver._spi.xfer.assert_called_once_with([0x12 | 0x40, mdmcfg2_after])
+    transceiver._spi.transfer.assert_called_once_with([0x12 | 0x40, mdmcfg2_after])

@@ -56,7 +56,7 @@ def test_transmit_unexpected_payload_len(transceiver, packet_length, payload):
 
 @pytest.mark.parametrize("payload", (b"\0", b"\xaa\xbb\xcc", bytes(range(42))))
 def test_transmit_fixed(caplog, transceiver, payload):
-    transceiver._spi.xfer.side_effect = lambda v: [15] * len(v)
+    transceiver._spi.transfer.side_effect = lambda v: [15] * len(v)
     with unittest.mock.patch.object(
         transceiver,
         "get_packet_length_mode",
@@ -71,7 +71,7 @@ def test_transmit_fixed(caplog, transceiver, payload):
         logging.INFO
     ):
         transceiver.transmit(payload)
-    assert transceiver._spi.xfer.call_args_list == [
+    assert transceiver._spi.transfer.call_args_list == [
         unittest.mock.call([0x3B]),  # flush
         unittest.mock.call([0x3F | 0x40] + list(payload)),
         unittest.mock.call([0x35]),  # start transmission
@@ -91,7 +91,7 @@ def test_transmit_fixed(caplog, transceiver, payload):
     "payload", (b"\x01\0", b"\x03\xaa\xbb\xcc", b"\x10" + bytes(range(16)))
 )
 def test_transmit_variable(transceiver, payload):
-    transceiver._spi.xfer.side_effect = lambda v: [15] * len(v)
+    transceiver._spi.transfer.side_effect = lambda v: [15] * len(v)
     with unittest.mock.patch.object(
         transceiver,
         "get_packet_length_mode",
@@ -104,7 +104,7 @@ def test_transmit_variable(transceiver, payload):
         return_value=cc1101.MainRadioControlStateMachineState.IDLE,
     ):
         transceiver.transmit(payload)
-    assert transceiver._spi.xfer.call_args_list == [
+    assert transceiver._spi.transfer.call_args_list == [
         unittest.mock.call([0x3B]),  # flush
         unittest.mock.call([0x3F | 0x40] + [len(payload)] + list(payload)),
         unittest.mock.call([0x35]),  # start transmission

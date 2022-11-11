@@ -24,13 +24,13 @@ import pytest
     ("mdmcfg3", "symbol_rate_mantissa"), [(0b00100010, 34), (0b10101010, 170)]
 )
 def test__get_symbol_rate_mantissa(transceiver, mdmcfg3, symbol_rate_mantissa):
-    transceiver._spi.xfer.return_value = [15, mdmcfg3]
+    transceiver._spi.transfer.return_value = [15, mdmcfg3]
     assert transceiver._get_symbol_rate_mantissa() == symbol_rate_mantissa
-    transceiver._spi.xfer.assert_called_once_with([0x11 | 0x80, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x11 | 0x80, 0])
 
 
 @pytest.mark.parametrize(("mantissa"), (0, 0xFF, 0b10100101))
 def test__set_symbol_rate_mantissa(transceiver, mantissa):
-    transceiver._spi.xfer.return_value = [15, 15]
+    transceiver._spi.transfer.return_value = [15, 15]
     transceiver._set_symbol_rate_mantissa(mantissa)
-    transceiver._spi.xfer.assert_called_once_with([0x11 | 0x40, mantissa])
+    transceiver._spi.transfer.assert_called_once_with([0x11 | 0x40, mantissa])

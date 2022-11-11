@@ -36,9 +36,9 @@ import pytest
     ],
 )
 def test_get_preamble_length_bytes(transceiver, mdmcfg1, length):
-    transceiver._spi.xfer.return_value = [0, mdmcfg1]
+    transceiver._spi.transfer.return_value = [0, mdmcfg1]
     assert transceiver.get_preamble_length_bytes() == length
-    transceiver._spi.xfer.assert_called_once_with([0x13 | 0x80, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x13 | 0x80, 0])
 
 
 @pytest.mark.parametrize(
@@ -61,12 +61,12 @@ def test_get_preamble_length_bytes(transceiver, mdmcfg1, length):
     ],
 )
 def test_set_preamble_length_bytes(transceiver, mdmcfg1_before, mdmcfg1_after, length):
-    transceiver._spi.xfer.return_value = [15, 15]
+    transceiver._spi.transfer.return_value = [15, 15]
     with unittest.mock.patch.object(
         transceiver, "_read_single_byte", return_value=mdmcfg1_before
     ):
         transceiver.set_preamble_length_bytes(length)
-    transceiver._spi.xfer.assert_called_once_with([0x13 | 0x40, mdmcfg1_after])
+    transceiver._spi.transfer.assert_called_once_with([0x13 | 0x40, mdmcfg1_after])
 
 
 @pytest.mark.parametrize(

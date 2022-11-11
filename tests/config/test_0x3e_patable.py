@@ -29,9 +29,9 @@ import pytest
     ),
 )
 def test__get_patable(transceiver, patable):
-    transceiver._spi.xfer.return_value = [0] + list(patable)
+    transceiver._spi.transfer.return_value = [0] + list(patable)
     assert transceiver._get_patable() == patable
-    transceiver._spi.xfer.assert_called_once_with([0x3E | 0xC0] + [0] * 8)
+    transceiver._spi.transfer.assert_called_once_with([0x3E | 0xC0] + [0] * 8)
 
 
 @pytest.mark.parametrize(
@@ -46,9 +46,9 @@ def test__get_patable(transceiver, patable):
     ),
 )
 def test__set_patable(transceiver, patable):
-    transceiver._spi.xfer.return_value = [0b00000111] * (len(patable) + 1)
+    transceiver._spi.transfer.return_value = [0b00000111] * (len(patable) + 1)
     transceiver._set_patable(patable)
-    transceiver._spi.xfer.assert_called_once_with([0x3E | 0x40] + list(patable))
+    transceiver._spi.transfer.assert_called_once_with([0x3E | 0x40] + list(patable))
 
 
 @pytest.mark.parametrize(
@@ -57,4 +57,4 @@ def test__set_patable(transceiver, patable):
 def test__set_patable_invalid(transceiver, patable):
     with pytest.raises(Exception):
         transceiver._set_patable(patable)
-    transceiver._spi.xfer.assert_not_called()
+    transceiver._spi.transfer.assert_not_called()

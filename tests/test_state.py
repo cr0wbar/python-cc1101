@@ -31,10 +31,10 @@ import cc1101
     ),
 )
 def test_get_main_radio_control_state_machine_state(transceiver, marcstate):
-    transceiver._spi.xfer.return_value = [
+    transceiver._spi.transfer.return_value = [
         0b0000111,  # chip status "idle", but irrelevant for retrieval of marcstate
         marcstate.value,
     ]
     assert transceiver.get_main_radio_control_state_machine_state() == marcstate
-    transceiver._spi.xfer.assert_called_once_with([0x35 | 0xC0, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x35 | 0xC0, 0])
     assert transceiver.get_marc_state() == marcstate

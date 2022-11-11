@@ -24,9 +24,9 @@ import pytest
 
 
 def test__enable_receive_mode(transceiver):
-    transceiver._spi.xfer.return_value = [15]
+    transceiver._spi.transfer.return_value = [15]
     transceiver._enable_receive_mode()
-    transceiver._spi.xfer.assert_called_once_with([0x34 | 0x00])
+    transceiver._spi.transfer.assert_called_once_with([0x34 | 0x00])
 
 
 @pytest.mark.parametrize("payload", [b"\0", b"\x12\x45\x56"])

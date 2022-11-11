@@ -26,7 +26,7 @@ import math
 import typing
 import warnings
 
-import spidev
+import periphery
 
 import cc1101._gpio
 from cc1101.addresses import (
@@ -74,12 +74,12 @@ class _ReceivedPacket:  # unstable
     _RSSI_OFFSET_dB = 74
 
     def __init__(
-        self,
-        *,
-        payload: bytes,
-        rssi_index: int,  # byte
-        checksum_valid: bool,
-        link_quality_indicator: int,  # 7bit
+            self,
+            *,
+            payload: bytes,
+            rssi_index: int,  # byte
+            checksum_valid: bool,
+            link_quality_indicator: int,  # 7bit
     ):
         self.payload = payload
         self._rssi_index = rssi_index
@@ -114,7 +114,6 @@ def _format_patable(settings: typing.Iterable[int], insert_spaces: bool) -> str:
 
 
 class CC1101:
-
     # pylint: disable=too-many-public-methods
 
     # > All transfers on the SPI interface are done
@@ -140,14 +139,14 @@ class CC1101:
     # > The two versions of the chip will behave the same.
     # https://e2e.ti.com/support/wireless-connectivity/sub-1-ghz/f/156/p/428028/1529544#1529544
     _SUPPORTED_VERSIONS = [
-        0x04,  #  https://github.com/fphammerle/python-cc1101/issues/15
+        0x04,  # https://github.com/fphammerle/python-cc1101/issues/15
         0x14,
     ]
 
     _CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ = 26e6
     # see "21 Frequency Programming"
     # > f_carrier = f_XOSC / 2**16 * (FREQ + CHAN * ((256 + CHANSPC_M) * 2**CHANSPC_E-2))
-    _FREQUENCY_CONTROL_WORD_HERTZ_FACTOR = _CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ / 2**16
+    _FREQUENCY_CONTROL_WORD_HERTZ_FACTOR = _CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ / 2 ** 16
 
     # roughly estimated / tested with SDR receiver, docs specify:
     # > can [...] be programmed for operation at other frequencies
@@ -158,7 +157,7 @@ class CC1101:
     _PATABLE_LENGTH_BYTES = 8
 
     def __init__(
-        self, spi_bus: int = 0, spi_chip_select: int = 0, lock_spi_device: bool = False
+            self, spi_bus: int = 0, spi_chip_select: int = 0, lock_spi_device: bool = False
     ) -> None:
         """
         lock_spi_device:
@@ -178,7 +177,6 @@ class CC1101:
             >>>     transceiver.unlock_spi_device()
             >>>     # lock removed
         """
-        self._spi = spidev.SpiDev()
         self._spi_bus = int(spi_bus)
         # > The BCM2835 core common to all Raspberry Pi devices has 3 SPI Controllers:
         # > SPI0, with two hardware chip selects, [...]
@@ -188,6 +186,7 @@ class CC1101:
         # https://www.raspberrypi.org/documentation/hardware/raspberrypi/spi/README.md
         self._spi_chip_select = int(spi_chip_select)
         self._lock_spi_device = lock_spi_device
+        self._spi: periphery.SPI = None
 
     @property
     def _spi_device_path(self) -> str:
@@ -210,21 +209,21 @@ class CC1101:
         )
 
     def _read_single_byte(
-        self, register: typing.Union[ConfigurationRegisterAddress, FIFORegisterAddress]
+            self, register: typing.Union[ConfigurationRegisterAddress, FIFORegisterAddress]
     ) -> int:
-        response = self._spi.xfer([register | self._READ_SINGLE_BYTE, 0])
+        response = self._spi.transfer([register | self._READ_SINGLE_BYTE, 0])
         assert len(response) == 2, response
         self._log_chip_status_byte(response[0])
         return response[1]
 
     def _read_burst(
-        self,
-        start_register: typing.Union[
-            ConfigurationRegisterAddress, PatableAddress, FIFORegisterAddress
-        ],
-        length: int,
+            self,
+            start_register: typing.Union[
+                ConfigurationRegisterAddress, PatableAddress, FIFORegisterAddress
+            ],
+            length: int,
     ) -> typing.List[int]:
-        response = self._spi.xfer([start_register | self._READ_BURST] + [0] * length)
+        response = self._spi.transfer([start_register | self._READ_BURST] + [0] * length)
         assert len(response) == length + 1, response
         self._log_chip_status_byte(response[0])
         return response[1:]
@@ -239,7 +238,7 @@ class CC1101:
         # > for status registers and they must be accessed
         # > one at a time. The status registers can only be
         # > read.
-        response = self._spi.xfer([register | self._READ_BURST, 0])
+        response = self._spi.transfer([register | self._READ_BURST, 0])
         assert len(response) == 2, response
         self._log_chip_status_byte(response[0])
         return response[1]
@@ -247,21 +246,21 @@ class CC1101:
     def _command_strobe(self, register: StrobeAddress) -> None:
         # see "10.4 Command Strobes"
         _LOGGER.debug("sending command strobe 0x%02x", register)
-        response = self._spi.xfer([register | self._WRITE_SINGLE_BYTE])
+        response = self._spi.transfer([register | self._WRITE_SINGLE_BYTE])
         assert len(response) == 1, response
         self._log_chip_status_byte(response[0])
 
     def _write_burst(
-        self,
-        start_register: typing.Union[
-            ConfigurationRegisterAddress, PatableAddress, FIFORegisterAddress
-        ],
-        values: typing.List[int],
+            self,
+            start_register: typing.Union[
+                ConfigurationRegisterAddress, PatableAddress, FIFORegisterAddress
+            ],
+            values: typing.List[int],
     ) -> None:
         _LOGGER.debug(
             "writing burst: start_register=0x%02x values=%s", start_register, values
         )
-        response = self._spi.xfer([start_register | self._WRITE_BURST] + values)
+        response = self._spi.transfer([start_register | self._WRITE_BURST] + values)
         assert len(response) == len(values) + 1, response
         self._log_chip_status_byte(response[0])
         assert all(v == response[0] for v in response[1:]), response
@@ -271,13 +270,13 @@ class CC1101:
 
     @classmethod
     def _filter_bandwidth_floating_point_to_real(
-        cls, *, mantissa: int, exponent: int
+            cls, *, mantissa: int, exponent: int
     ) -> float:
         """
         See "13 Receiver Channel Filter Bandwidth"
         """
         return cls._CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ / (
-            8 * (4 + mantissa) * (2**exponent)
+                8 * (4 + mantissa) * (2 ** exponent)
         )
 
     def _get_filter_bandwidth_hertz(self) -> float:
@@ -336,14 +335,14 @@ class CC1101:
 
     @classmethod
     def _symbol_rate_floating_point_to_real(
-        cls, *, mantissa: int, exponent: int
+            cls, *, mantissa: int, exponent: int
     ) -> float:
         # see "12 Data Rate Programming"
         return (
-            (256 + mantissa)
-            * (2**exponent)
-            * cls._CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ
-            / (2**28)
+                (256 + mantissa)
+                * (2 ** exponent)
+                * cls._CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ
+                / (2 ** 28)
         )
 
     @classmethod
@@ -354,14 +353,14 @@ class CC1101:
             math.log2(real / cls._CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ) + 20
         )
         mantissa = round(
-            real * 2**28 / cls._CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ / 2**exponent
+            real * 2 ** 28 / cls._CRYSTAL_OSCILLATOR_FREQUENCY_HERTZ / 2 ** exponent
             - 256
         )
         if mantissa == 256:
             exponent += 1
             mantissa = 0
-        assert 0 < exponent <= 2**4, exponent
-        assert mantissa <= 2**8, mantissa
+        assert 0 < exponent <= 2 ** 4, exponent
+        assert mantissa <= 2 ** 8, mantissa
         return mantissa, exponent
 
     def get_symbol_rate_baud(self) -> float:
@@ -402,10 +401,10 @@ class CC1101:
         return SyncMode(mdmcfg2 & 0b11)
 
     def set_sync_mode(
-        self,
-        mode: SyncMode,
-        *,
-        _carrier_sense_threshold_enabled: typing.Optional[bool] = None,  # unstable
+            self,
+            mode: SyncMode,
+            *,
+            _carrier_sense_threshold_enabled: typing.Optional[bool] = None,  # unstable
     ) -> None:
         """
         MDMCFG2.SYNC_MODE
@@ -439,8 +438,8 @@ class CC1101:
         See "15.2 Packet Format"
         """
         index = (
-            self._read_single_byte(ConfigurationRegisterAddress.MDMCFG1) >> 4
-        ) & 0b111
+                        self._read_single_byte(ConfigurationRegisterAddress.MDMCFG1) >> 4
+                ) & 0b111
         return 2 ** (index >> 1) * (2 + (index & 0b1))
 
     def _set_preamble_length_index(self, index: int) -> None:
@@ -545,22 +544,12 @@ class CC1101:
 
     def __enter__(self) -> CC1101:
         # https://docs.python.org/3/reference/datamodel.html#object.__enter__
-        try:
-            self._spi.open(self._spi_bus, self._spi_chip_select)
-        except PermissionError as exc:
-            raise PermissionError(
-                f"Could not access {self._spi_device_path}"
-                "\nVerify that the current user has both read and write access."
-                "\nOn some systems, like Raspberry Pi OS / Raspbian,"
-                "\n\tsudo usermod -a -G spi $USER"
-                "\nfollowed by a re-login grants sufficient permissions."
-            ) from exc
+        self._spi = periphery.SPI(self._spi_device_path, 0, 55700)  # Max speed in Hz is empirical
         if self._lock_spi_device:
             # advisory, exclusive, non-blocking
             # lock removed in __exit__ by SpiDev.close()
-            fcntl.flock(self._spi.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(self._spi.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
-            self._spi.max_speed_hz = 55700  # empirical
             self._reset()
             self._verify_chip()
             self._configure_defaults()
@@ -596,12 +585,13 @@ class CC1101:
         >>>     transceiver.unlock_spi_device()
         >>>     # lock removed
         """
-        fileno = self._spi.fileno()
-        if fileno != -1:
-            fcntl.flock(fileno, fcntl.LOCK_UN)
+        if self._spi:
+            fileno = self._spi.fd
+            if fileno != -1:
+                fcntl.flock(fileno, fcntl.LOCK_UN)
 
     def get_main_radio_control_state_machine_state(
-        self,
+            self,
     ) -> MainRadioControlStateMachineState:
         return MainRadioControlStateMachineState(
             self._read_status_register(StatusRegisterAddress.MARCSTATE)
@@ -616,8 +606,8 @@ class CC1101:
     @classmethod
     def _frequency_control_word_to_hertz(cls, control_word: typing.List[int]) -> float:
         return (
-            int.from_bytes(control_word, byteorder="big", signed=False)
-            * cls._FREQUENCY_CONTROL_WORD_HERTZ_FACTOR
+                int.from_bytes(control_word, byteorder="big", signed=False)
+                * cls._FREQUENCY_CONTROL_WORD_HERTZ_FACTOR
         )
 
     @classmethod
@@ -687,11 +677,11 @@ class CC1101:
         return "CC1101({})".format(", ".join(filter(None, attrs)))
 
     def get_configuration_register_values(
-        self,
-        start_register: ConfigurationRegisterAddress = min(
-            ConfigurationRegisterAddress
-        ),
-        end_register: ConfigurationRegisterAddress = max(ConfigurationRegisterAddress),
+            self,
+            start_register: ConfigurationRegisterAddress = min(
+                ConfigurationRegisterAddress
+            ),
+            end_register: ConfigurationRegisterAddress = max(ConfigurationRegisterAddress),
     ) -> typing.Dict[ConfigurationRegisterAddress, int]:
         assert start_register <= end_register, (start_register, end_register)
         values = self._read_burst(
@@ -891,8 +881,8 @@ class CC1101:
                 )
             payload = int.to_bytes(len(payload), length=1, byteorder="big") + payload
         elif (
-            packet_length_mode == PacketLengthMode.FIXED
-            and len(payload) != packet_length
+                packet_length_mode == PacketLengthMode.FIXED
+                and len(payload) != packet_length
         ):
             raise ValueError(
                 f"expected payload length of {packet_length} bytes, got {len(payload)}"
@@ -953,9 +943,9 @@ class CC1101:
         )
 
     def _wait_for_packet(  # unstable
-        self,
-        timeout: datetime.timedelta,
-        gdo0_gpio_line_name: bytes = b"GPIO24",  # recommended in README.md
+            self,
+            timeout: datetime.timedelta,
+            gdo0_gpio_line_name: bytes = b"GPIO24",  # recommended in README.md
     ) -> typing.Optional[_ReceivedPacket]:
         """
         depends on IOCFG0 == 0b00000001 (see _configure_defaults)

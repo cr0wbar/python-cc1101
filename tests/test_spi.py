@@ -30,34 +30,33 @@ import cc1101.options
 @pytest.mark.parametrize("bus", [0, 1])
 @pytest.mark.parametrize("chip_select", [0, 2])
 def test___init__select_device(bus, chip_select):
-    with unittest.mock.patch("spidev.SpiDev"):
+    with unittest.mock.patch("periphery.SPI") as spi:
         transceiver = cc1101.CC1101(spi_bus=bus, spi_chip_select=chip_select)
-    assert transceiver._spi_bus == bus
-    assert transceiver._spi_chip_select == chip_select
-    assert transceiver._spi_device_path == f"/dev/spidev{bus}.{chip_select}"
-    transceiver._spi.open.side_effect = SystemExit
-    with pytest.raises(SystemExit):
-        with transceiver:
-            pass
-    transceiver._spi.open.assert_called_once_with(bus, chip_select)
+        assert transceiver._spi_bus == bus
+        assert transceiver._spi_chip_select == chip_select
+        assert transceiver._spi_device_path == f"/dev/spidev{bus}.{chip_select}"
+        spi.side_effect = SystemExit
+        with pytest.raises(SystemExit):
+            with transceiver:
+                transceiver._spi.assert_called_once_with(f"/dev/spidev{bus}.{chip_select}", 0, 55700)
 
 
 def test__read_status_register(transceiver):
-    transceiver._spi.xfer.return_value = [0, 20]
+    transceiver._spi.transfer.return_value = [0, 20]
     transceiver._read_status_register(cc1101.addresses.StatusRegisterAddress.VERSION)
-    transceiver._spi.xfer.assert_called_once_with([0x31 | 0xC0, 0])
+    transceiver._spi.transfer.assert_called_once_with([0x31 | 0xC0, 0])
 
 
 def test__command_strobe(transceiver):
-    transceiver._spi.xfer.return_value = [15]
+    transceiver._spi.transfer.return_value = [15]
     transceiver._command_strobe(cc1101.addresses.StrobeAddress.STX)
-    transceiver._spi.xfer.assert_called_once_with([0x35 | 0x00])
+    transceiver._spi.transfer.assert_called_once_with([0x35 | 0x00])
 
 
 def test__reset(transceiver):
-    transceiver._spi.xfer.return_value = [15]
+    transceiver._spi.transfer.return_value = [15]
     transceiver._reset()
-    transceiver._spi.xfer.assert_called_once_with([0x30 | 0x00])
+    transceiver._spi.transfer.assert_called_once_with([0x30 | 0x00])
 
 
 @pytest.mark.parametrize("chip_version", [0x14, 0x04])
@@ -83,20 +82,20 @@ def test___enter__(transceiver, chip_version):
             cc1101.addresses.StatusRegisterAddress.PARTNUM: 0,
             cc1101.addresses.StatusRegisterAddress.VERSION: chip_version,
         }[r]
-        with transceiver as transceiver_context:
-            assert transceiver == transceiver_context
-            transceiver._spi.open.assert_called_once_with(0, 0)
-            assert transceiver._spi.max_speed_hz == 55700
-            reset_mock.assert_called_once_with()
-            set_modulation_format_mock.assert_called_once_with(
-                cc1101.options.ModulationFormat.ASK_OOK
-            )
-            set_pa_setting_mock.assert_called_once_with(1)
-            disable_whitening_mock.assert_called_once_with()
-            assert write_burst_mock.call_args_list == [
-                unittest.mock.call(0x18, [0b010100]),
-                unittest.mock.call(0x02, [0b000001]),
-            ]
+        with unittest.mock.patch("periphery.SPI") as spi:
+            with transceiver as transceiver_context:
+                assert transceiver == transceiver_context
+                spi.assert_called_once_with(transceiver._spi_device_path, 0, 55700)
+                reset_mock.assert_called_once_with()
+                set_modulation_format_mock.assert_called_once_with(
+                    cc1101.options.ModulationFormat.ASK_OOK
+                )
+                set_pa_setting_mock.assert_called_once_with(1)
+                disable_whitening_mock.assert_called_once_with()
+                assert write_burst_mock.call_args_list == [
+                    unittest.mock.call(0x18, [0b010100]),
+                    unittest.mock.call(0x02, [0b000001]),
+                ]
 
 
 def test___enter___unsupported_partnum(transceiver):
@@ -107,8 +106,9 @@ def test___enter___unsupported_partnum(transceiver):
             cc1101.addresses.StatusRegisterAddress.PARTNUM: 21
         }[r]
         with pytest.raises(ValueError, match=r"^unexpected chip part number "):
-            with transceiver:
-                pass
+            with unittest.mock.patch("periphery.SPI"):
+                with transceiver:
+                    pass
 
 
 def test___enter___unsupported_chip_version(transceiver):
@@ -127,8 +127,9 @@ def test___enter___unsupported_chip_version(transceiver):
                 )
             ),
         ):
-            with transceiver:
-                pass
+            with unittest.mock.patch("periphery.SPI"):
+                with transceiver:
+                    pass
 
 
 def test___enter___chip_version_zero(transceiver):
@@ -146,19 +147,9 @@ def test___enter___chip_version_zero(transceiver):
             r" \(see https://github\.com/fphammerle/python\-cc1101\#wiring\-raspberry\-pi\)"
             r" and that you selected the correct SPI bus and chip/slave select line\.$",
         ):
-            with transceiver:
-                pass
-
-
-@pytest.mark.parametrize("bus", [0, 1])
-@pytest.mark.parametrize("chip_select", [0, 2])
-def test___enter__permission_error(transceiver, bus, chip_select):
-    transceiver._spi.open.side_effect = PermissionError("[Errno 13] Permission denied")
-    transceiver._spi_bus = bus
-    transceiver._spi_chip_select = chip_select
-    with pytest.raises(PermissionError, match=f"\\s/dev/spidev{bus}.{chip_select}\\s"):
-        with transceiver:
-            pass
+            with unittest.mock.patch("periphery.SPI"):
+                with transceiver:
+                    pass
 
 
 def test___enter__non_idle(transceiver):
@@ -174,5 +165,6 @@ def test___enter__non_idle(transceiver):
         with pytest.raises(
             ValueError, match=r"^expected marcstate idle \(actual: TX\)$"
         ):
-            with transceiver:
-                pass
+            with unittest.mock.patch("periphery.SPI"):
+                with transceiver:
+                    pass

@@ -1,0 +1,3 @@
+[console_scripts]
+cc1101-export-config = cc1101._cli:_export_config
+cc1101-transmit = cc1101._cli:_transmit

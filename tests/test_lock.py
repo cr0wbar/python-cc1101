@@ -19,7 +19,7 @@ import contextlib
 import unittest.mock
 
 import pytest
-
+import os
 import cc1101
 import cc1101.addresses
 
@@ -29,15 +29,15 @@ import cc1101.addresses
 @pytest.fixture(scope="function")
 def spidev_mock(tmp_path):
     class _SpiDevMock:
-        def __init__(self):
-            self._file = None
-
-        def open(self, bus, select):
-            path = tmp_path.joinpath(f"spidev{bus}.{select}~")
+        def __init__(self, path, mode, maxhz):
+            self._min = mode
+            self._max = maxhz
+            path = tmp_path.joinpath(f"{os.path.split(path)[-1]}~")
             self._file = path.open("w+")
 
-        def fileno(self):
-            # mimic behaviour of spidev.SpiDev.fileno()
+        @property
+        def fd(self):
+            # mimic behaviour of periphery.SPI.fileno()
             return self._file.fileno() if self._file else -1
 
         def close(self):
@@ -68,116 +68,116 @@ def _mock_hardware_access():
 
 def test_context_lock(spidev_mock):
     with _mock_hardware_access():
-        with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+        with unittest.mock.patch("periphery.SPI", spidev_mock):
             transceiver = cc1101.CC1101(lock_spi_device=True)
-        with transceiver:
-            with unittest.mock.patch("spidev.SpiDev", spidev_mock):
-                transceiver2 = cc1101.CC1101(lock_spi_device=True)
-            with pytest.raises(BlockingIOError):
-                with transceiver2:
+            with transceiver:
+                with unittest.mock.patch("periphery.SPI", spidev_mock):
+                    transceiver2 = cc1101.CC1101(lock_spi_device=True)
+                with pytest.raises(BlockingIOError):
+                    with transceiver2:
+                        pass
+                with unittest.mock.patch("periphery.SPI", spidev_mock):
+                    transceiver3 = cc1101.CC1101(lock_spi_device=False)
+                with transceiver3:
                     pass
-            with unittest.mock.patch("spidev.SpiDev", spidev_mock):
-                transceiver3 = cc1101.CC1101(lock_spi_device=False)
-            with transceiver3:
+            with transceiver2:  # closing unlocks
                 pass
-        with transceiver2:  # closing unlocks
-            pass
 
 
 def test_context_no_lock(spidev_mock):
     with _mock_hardware_access():
-        with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+        with unittest.mock.patch("periphery.SPI", spidev_mock):
             transceiver = cc1101.CC1101(lock_spi_device=False)
-        with transceiver:
-            with unittest.mock.patch("spidev.SpiDev", spidev_mock):
-                transceiver2 = cc1101.CC1101(lock_spi_device=True)
-            with transceiver2:
-                pass
+            with transceiver:
+                with unittest.mock.patch("periphery.SPI", spidev_mock):
+                    transceiver2 = cc1101.CC1101(lock_spi_device=True)
+                with transceiver2:
+                    pass
 
 
 def test_unlock_spi_device(spidev_mock):
     with _mock_hardware_access():
-        with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+        with unittest.mock.patch("periphery.SPI", spidev_mock):
             transceiver = cc1101.CC1101(lock_spi_device=True)
             transceiver2 = cc1101.CC1101(lock_spi_device=True)
-        with transceiver:  # acquire lock
-            with pytest.raises(BlockingIOError):
+            with transceiver:  # acquire lock
+                with pytest.raises(BlockingIOError):
+                    with transceiver2:
+                        pass
+                transceiver.unlock_spi_device()
                 with transceiver2:
                     pass
-            transceiver.unlock_spi_device()
-            with transceiver2:
-                pass
 
 
 def test_unlock_spi_device_double(spidev_mock):
     with _mock_hardware_access():
-        with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+        with unittest.mock.patch("periphery.SPI", spidev_mock):
             transceiver = cc1101.CC1101(lock_spi_device=True)
-        # verify no error occurs
-        with transceiver:  # acquire lock
-            transceiver.unlock_spi_device()
-            transceiver.unlock_spi_device()
+            # verify no error occurs
+            with transceiver:  # acquire lock
+                transceiver.unlock_spi_device()
+                transceiver.unlock_spi_device()
 
 
 def test_unlock_spi_device_outside_context(spidev_mock):
     with _mock_hardware_access():
-        with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+        with unittest.mock.patch("periphery.SPI", spidev_mock):
             transceiver = cc1101.CC1101(lock_spi_device=True)
-        # verify no error occurs
-        transceiver.unlock_spi_device()
-        with transceiver:  # acquire lock
-            pass
-        transceiver.unlock_spi_device()
+             # verify no error occurs
+            transceiver.unlock_spi_device()
+            with transceiver:  # acquire lock
+                pass
+            transceiver.unlock_spi_device()
 
 
 def test_unlock_spi_device_no_lock(spidev_mock):
     with _mock_hardware_access():
-        with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+        with unittest.mock.patch("periphery.SPI", spidev_mock):
             transceiver = cc1101.CC1101(lock_spi_device=False)
-        with transceiver:  # no lock acquired
-            # verify no error occurs
-            transceiver.unlock_spi_device()
+            with transceiver:  # no lock acquired
+                # verify no error occurs
+                transceiver.unlock_spi_device()
 
 
 def test_unlock_on_exception_within_context(spidev_mock):
-    with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+    with unittest.mock.patch("periphery.SPI", spidev_mock):
         transceiver1 = cc1101.CC1101(lock_spi_device=True)
         transceiver2 = cc1101.CC1101(lock_spi_device=True)
-    with _mock_hardware_access():
-        with pytest.raises(ValueError, match=r"^test$"):
-            with transceiver1:
-                raise ValueError("test")
-        with transceiver2:
-            pass  # no BlockingIOError
-        # does locking still work after exception?
-        with transceiver1:
-            with pytest.raises(BlockingIOError):
-                with transceiver2:
-                    pass
-        with transceiver2:
-            with pytest.raises(BlockingIOError):
+        with _mock_hardware_access():
+            with pytest.raises(ValueError, match=r"^test$"):
                 with transceiver1:
-                    pass
+                    raise ValueError("test")
+            with transceiver2:
+                pass  # no BlockingIOError
+            # does locking still work after exception?
+            with transceiver1:
+                with pytest.raises(BlockingIOError):
+                    with transceiver2:
+                        pass
+            with transceiver2:
+                with pytest.raises(BlockingIOError):
+                    with transceiver1:
+                        pass
 
 
 def test_unlock_on_exception_when_entering_context(spidev_mock):
-    with unittest.mock.patch("spidev.SpiDev", spidev_mock):
+    with unittest.mock.patch("periphery.SPI", spidev_mock):
         transceiver1 = cc1101.CC1101(lock_spi_device=True)
         transceiver2 = cc1101.CC1101(lock_spi_device=True)
-    with _mock_hardware_access():
-        with unittest.mock.patch.object(
-            cc1101.CC1101, "_verify_chip", side_effect=ValueError("test")
-        ), pytest.raises(ValueError, match=r"^test$"):
-            with transceiver1:
-                pass  # never reached
-        with transceiver2:
-            pass  # no BlockingIOError
-        # does locking still work after exception?
-        with transceiver1:
-            with pytest.raises(BlockingIOError):
-                with transceiver2:
-                    pass
-        with transceiver2:
-            with pytest.raises(BlockingIOError):
+        with _mock_hardware_access():
+            with unittest.mock.patch.object(
+                cc1101.CC1101, "_verify_chip", side_effect=ValueError("test")
+            ), pytest.raises(ValueError, match=r"^test$"):
                 with transceiver1:
-                    pass
+                    pass  # never reached
+            with transceiver2:
+                pass  # no BlockingIOError
+            # does locking still work after exception?
+            with transceiver1:
+                with pytest.raises(BlockingIOError):
+                    with transceiver2:
+                        pass
+            with transceiver2:
+                with pytest.raises(BlockingIOError):
+                    with transceiver1:
+                        pass
